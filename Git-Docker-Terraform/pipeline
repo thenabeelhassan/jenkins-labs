@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    environment {
+        GITHUB_CREDENTIALS_ID = ''
+        GITHUB_URL = ''
+	APP_NAME = ''
+    }
+
+    stages {
+        stage('Prerequisites') {
+            steps {
+                script {
+                    // Generate the timestamp and set it as an environment variable
+                    env.TIMESTAMP = sh(script: "date +%Y%m%d%H%M%S", returnStdout: true).trim()
+                    echo "Generated timestamp: ${env.TIMESTAMP}"
+                }
+            }
+        }
+        stage('Checkout') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [],
+                    userRemoteConfigs: [[
+                        credentialsId: "${GITHUB_CREDENTIALS_ID}",
+                        url: "${GITHUB_URL}"
+                    ]]
+                ])
+            }
+        }
+        stage('Building Docker Image') {
+            steps {
+                dir ('./Web') {
+                    sh """
+                        docker build -t ${APP_NAME}:${env.TIMESTAMP} .
+                        docker tag ${APP_NAME}:${env.TIMESTAMP} ${APP_NAME}:latest
+                    """
+                }
+            }
+        }
+        stage('Pushing Docker Image') {
+            steps {
+                dir ('./Web') {
+                    sh """
+                        docker images
+                        ls -la
+                    """
+                }
+            }
+        }
+        stage('Building AWS Infra') {
+            steps {
+                dir ('./Terraform') {
+                    sh 'ls -la'
+                }
+            }
+        }
+    }
+}
